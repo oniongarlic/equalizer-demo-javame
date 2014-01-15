@@ -4,6 +4,8 @@
  */
 package tal.org.eq.demo;
 
+import java.io.*;
+
 import javax.microedition.lcdui.*;
 import javax.microedition.midlet.MIDlet;
 
@@ -84,8 +86,10 @@ public class EqualizerDemoMidlet extends MIDlet implements
         
         form=new Form("AMMS EqDemo");
         
-        playButton=new StringItem("Play", null, StringItem.BUTTON);
+        playButton=new StringItem("Example music", "Start Play", StringItem.BUTTON);
+        playCommand = new Command("Play", Command.ITEM, 1);
         playButton.setDefaultCommand(playCommand);
+        playButton.setItemCommandListener(this);
         form.append(playButton);
         
         backCommand = new Command("Back", Command.BACK, 1);
@@ -100,7 +104,10 @@ public class EqualizerDemoMidlet extends MIDlet implements
         form.addCommand(presetCommand);
         
         try {
-            player = Manager.createPlayer(getClass().getResourceAsStream("try_again.mp3"), "audio/mp3");
+            InputStream audioStream=getClass().getResourceAsStream("/try_again.mp3");
+            if (audioStream==null)
+                Log.log("Failed to get audio resource ?");
+            player = Manager.createPlayer(audioStream, "audio/mp3");
             player.setLoopCount(-1);
             player.realize();
         } catch (Exception e) {
@@ -133,31 +140,37 @@ public class EqualizerDemoMidlet extends MIDlet implements
         return btequalizerForm;
     }
     
+    // Adjust the band min/max/values to 0-max so we can use them with Gauge controls
+    private int scaleBandValue(int minL, int maxL, int level, int maxV) {        
+        return (level-minL)*maxV/(maxL-minL);
+    }
+    
     public Form getFormEqualizer() {
         if (equalizerForm == null) {
             int maxlevel;
             int level;
+            int steps=15; // Adjust for more eq steps
             
             equalizerForm = new Form("Equalizer");
                         
             eqGauges = new Gauge[bands];
-            maxlevel=bandMaxLevel;
+            maxlevel=scaleBandValue(bandMinLevel, bandMaxLevel, 0, steps);            
+            Log.log("ML: "+maxlevel);
             
             for (int i=0;i<bands;i++) {
                 level = equalizerControl.getBandLevel(i);
+                int blevel=scaleBandValue(bandMinLevel, bandMaxLevel, level, steps);
                 
-                eqGauges[i] = new Gauge(equalizerControl.getCenterFreq(i)+"", true, maxlevel, level);
+                eqGauges[i] = new Gauge("Band "+equalizerControl.getCenterFreq(i), true, maxlevel, blevel);
                 eqGauges[i].setLayout(Item.LAYOUT_EXPAND);
-            }
-                        
-            equalizerForm.append(bassGauge);
-            equalizerForm.append(trebleGauge);            
+                equalizerForm.append(eqGauges[i]);
+            }                                                
             
             equalizerForm.addCommand(backCommand);
             equalizerForm.setCommandListener(this);
             equalizerForm.setItemStateListener(this);
         }
-        return btequalizerForm;
+        return equalizerForm;
     }
     
     public Form getFormPreset() {
@@ -170,16 +183,23 @@ public class EqualizerDemoMidlet extends MIDlet implements
                     presetChoice.append(presets[i], null);
             }
             presetForm.append(presetChoice);
+            
+            presetForm.addCommand(backCommand);
+            presetForm.setCommandListener(this);
+            presetForm.setItemStateListener(this);
         }
         return presetForm;
     }
     
     public void itemStateChanged(Item item) {        
-        if (item == bassGauge) {            
-            equalizerControl.setBass(bassGauge.getValue()*10);            
+        if (item == bassGauge) {
+            Log.log("SetBass");
+            equalizerControl.setBass(bassGauge.getValue()*10);
         } else if (item == trebleGauge) {
+            Log.log("SetTreble");
             equalizerControl.setTreble(trebleGauge.getValue()*10);
-        } else if (item == presetChoice) {            
+        } else if (item == presetChoice) {
+            Log.log("SetPreset");
             equalizerControl.setPreset(presetChoice.getString(presetChoice.getSelectedIndex()));        
         } else {
             Log.log("[UnknownItemStateChange]");
@@ -215,13 +235,17 @@ public class EqualizerDemoMidlet extends MIDlet implements
     public void commandAction(Command c, Item item) {
         Log.log("CA: " + c + " Item: " + item);
         if (c == playCommand) {
-        
+            playStart();
         }
         Log.log("Unknown CA?");
     }
     
     public void playStart() {
-         try {            
+         try {
+             VolumeControl control;
+             control = (VolumeControl)player.getControl("VolumeControl");
+             control.setLevel(100);
+             control.setMute(false);
              player.start();
         } catch (MediaException e) {
             Log.loge("PlayerE:", e);
