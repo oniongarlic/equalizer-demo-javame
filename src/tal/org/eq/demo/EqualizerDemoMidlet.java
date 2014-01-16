@@ -56,6 +56,7 @@ public class EqualizerDemoMidlet extends MIDlet implements
     private int bandMinLevel;
     private int bandMaxLevel;
     private Gauge [] eqGauges;
+    private int steps=15; // Adjust for more eq steps
     
     // Equalizer presets
     private String [] presets;    
@@ -142,26 +143,25 @@ public class EqualizerDemoMidlet extends MIDlet implements
     
     // Adjust the band min/max/values to 0-max so we can use them with Gauge controls
     private int scaleBandValue(int minL, int maxL, int level, int maxV) {        
-        return (level-minL)*maxV/(maxL-minL);
+        return (level-minL)*(maxV/(maxL-minL));
+    }
+    
+    private int getBandValue(int minL, int maxL, int level, int maxV) {
+        return minL + level * (maxL - minL) / maxV;
     }
     
     public Form getFormEqualizer() {
         if (equalizerForm == null) {
-            int maxlevel;
             int level;
-            int steps=15; // Adjust for more eq steps
-            
-            equalizerForm = new Form("Equalizer");
-                        
+
+            equalizerForm = new Form("Equalizer");          
             eqGauges = new Gauge[bands];
-            maxlevel=scaleBandValue(bandMinLevel, bandMaxLevel, 0, steps);            
-            Log.log("ML: "+maxlevel);
-            
+
             for (int i=0;i<bands;i++) {
                 level = equalizerControl.getBandLevel(i);
                 int blevel=scaleBandValue(bandMinLevel, bandMaxLevel, level, steps);
                 
-                eqGauges[i] = new Gauge("Band "+equalizerControl.getCenterFreq(i), true, maxlevel, blevel);
+                eqGauges[i] = new Gauge("Band "+equalizerControl.getCenterFreq(i), true, steps, blevel);
                 eqGauges[i].setLayout(Item.LAYOUT_EXPAND);
                 equalizerForm.append(eqGauges[i]);
             }                                                
@@ -202,6 +202,13 @@ public class EqualizerDemoMidlet extends MIDlet implements
             Log.log("SetPreset");
             equalizerControl.setPreset(presetChoice.getString(presetChoice.getSelectedIndex()));        
         } else {
+            for (int i=0;i<bands;i++) {
+                if (item == eqGauges[i]) {
+                    int v=eqGauges[i].getValue();
+                    equalizerControl.setBandLevel(getBandValue(bandMinLevel, bandMaxLevel, v, steps), i);
+                    return;
+                }
+            }
             Log.log("[UnknownItemStateChange]");
         }
     }
